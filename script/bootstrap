@@ -202,6 +202,11 @@ install_modules () {
   done
 }
 
+install_oh_my_zsh () {
+  source $DOTFILES/oh_my_zsh/install.sh
+}
+
+install_oh_my_zsh
 setup_gitconfig
 install_dotfiles
 install_dependencies

@@ -1,4 +1,40 @@
-syntax on
+" Vundle settings:
+set nocompatible
 
-" Wrap gitcommit file types at the appropriate length
-filetype indent plugin on
+set smartindent
+set tabstop=4
+set shiftwidth=4
+set expandtab
+set visualbell
+syntax on
+" highlight tabs and trailing spaces
+set listchars=tab:>-,trail:-
+set list
+set number
+" allow backspacing over everything in insert mode
+set bs=2
+" disable backup file
+set nobackup
+" put swap files in common location
+set dir=~/.vimswp//
+set hlsearch
+" if has('gui_running')
+"    set background=light
+" else
+"     set background=dark
+" endif
+cmap Wsudo w !sudo tee % >/dev/null<CR>
+syntax enable
+set background=dark
+colorscheme solarized
+nnoremap <F3> :set hlsearch!<CR>
+filetype plugin indent on
+highlight clear SignColumn
+highlight clear LineNr
+set foldnestmax=2
+nnoremap <c-q> <c-v>
+nnoremap <space> za
+vnoremap <space> zf
+set ignorecase
+set smartcase
+let g:signify_vcs_list = [ 'hg' ]
