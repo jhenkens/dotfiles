@@ -5,3 +5,4 @@
 
 echo "› sudo softwareupdate -i -a"
 sudo softwareupdate -i -a
+source $DOTFILES/macos@Darwin/set-defaults.sh

@@ -3,9 +3,24 @@
 # bootstrap installs things.
 
 cd "$(dirname "$0")/.."
-DOTFILES_ROOT=$(pwd -P)
+export DOTFILES=$HOME/.dotfiles
 
 set -e
+
+UNAME=Other
+if test "$(uname)" = "Darwin"
+then
+  UNAME=Darwin
+elif test "$(expr substr $(uname -s) 1 5)" = "Linux"
+then
+  UNAME=Linux
+fi
+  
+FIND="find -H $DOTFILES -regextype posix-extended"
+if [ "$UNAME" == "Darwin" ]
+then
+  FIND="find -H -E $DOTFILES"
+fi
 
 echo ''
 
@@ -28,12 +43,12 @@ fail () {
 }
 
 setup_gitconfig () {
-  if ! [ -f git/gitconfig.local.symlink ]
+  if ! [ -f git/.gitconfig.local.symlink ]
   then
     info 'setup gitconfig'
 
     git_credential='cache'
-    if [ "$(uname -s)" == "Darwin" ]
+    if [ "$UNAME" == "Darwin" ]
     then
       git_credential='osxkeychain'
     fi
@@ -43,7 +58,7 @@ setup_gitconfig () {
     user ' - What is your github author email?'
     read -e git_authoremail
 
-    sed -e "s/AUTHORNAME/$git_authorname/g" -e "s/AUTHOREMAIL/$git_authoremail/g" -e "s/GIT_CREDENTIAL_HELPER/$git_credential/g" git/gitconfig.local.symlink.example > git/gitconfig.local.symlink
+    sed -e "s/AUTHORNAME/$git_authorname/g" -e "s/AUTHOREMAIL/$git_authoremail/g" -e "s/GIT_CREDENTIAL_HELPER/$git_credential/g" git/.gitconfig.local.symlink.example > git/.gitconfig.local.symlink
 
     success 'gitconfig'
   fi
@@ -73,7 +88,7 @@ link_file () {
 
         user "File already exists: $dst ($(basename "$src")), what do you want to do?\n\
         [s]kip, [S]kip all, [o]verwrite, [O]verwrite all, [b]ackup, [B]ackup all?"
-        read -n 1 action
+        read -n 1 action </dev/tty
 
         case "$action" in
           o )
@@ -120,9 +135,28 @@ link_file () {
 
   if [ "$skip" != "true" ]  # "false" or empty
   then
-    ln -s "$1" "$2"
-    success "linked $1 to $2"
+    mkdir -p "$(dirname $dst)"
+    ln -s "$src" "$dst"
+    success "linked $src to $dst"
   fi
+}
+
+find_failures () {
+  info 'checking for fuckups'
+  $FIND \( -name '*.symlink' -o -name '*.symlink@'"$UNAME" \) -a \( -path '*/*.symlink/*' -o -path '*/*.symlink@'"$UNAME"'/*' \) | \
+  while IFS= read -r src
+  do
+    fail 'Cannot have a symlink in a symlink: '"$src"
+  done
+}
+
+find_dotfiles () {
+  $FIND \( -name '*.symlink' -o -name '*.symlink@'"$UNAME" \) -not -path '*.git/*' \
+  | perl -ne 'print if not /@(?!'"$UNAME"')/'
+}
+find_installers () {
+  $FIND \( -name 'install.sh' -o -name 'install.sh@'"$UNAME" \) -not -path '*.git/*' \
+  | perl -ne 'print if not /@(?!'"$UNAME"')/'
 }
 
 install_dotfiles () {
@@ -130,27 +164,48 @@ install_dotfiles () {
 
   local overwrite_all=false backup_all=false skip_all=false
 
-  for src in $(find -H "$DOTFILES_ROOT" -maxdepth 2 -name '*.symlink' -not -path '*.git*')
+  find_dotfiles | \
+  while IFS= read -r src
   do
-    dst="$HOME/.$(basename "${src%.*}")"
+    dst=$(realpath --relative-to $DOTFILES $src)
+    dst=${dst#*/};
+    dst="$HOME/${dst%.*}"
     link_file "$src" "$dst"
+  done
+}
+
+install_dependencies () {
+  
+  # Install homebrew
+  $DOTFILES/homebrew/install.sh 2>&1
+  
+  # Upgrade homebrew
+  echo "› brew update"
+  brew update
+}
+
+install_modules () {
+  # Run Homebrew through the Brewfile
+  echo "› brew bundle"
+  brew bundle --file=Brewfile
+  if [ -e "Brewfile@$UNAME" ]
+  then
+    brew bundle --file="Brewfile@$UNAME"
+  fi
+  
+  # find the platform installers and run them iteratively
+  find_installers | \
+  while IFS= read -r installer
+  do
+     info "$installer"
+     sh -c "${installer}" 
   done
 }
 
 setup_gitconfig
 install_dotfiles
-
-# If we're on a Mac, let's install and setup homebrew.
-if [ "$(uname -s)" == "Darwin" ]
-then
-  info "installing dependencies"
-  if source bin/dot | while read -r data; do info "$data"; done
-  then
-    success "dependencies installed"
-  else
-    fail "error installing dependencies"
-  fi
-fi
+install_dependencies
+install_modules
 
 echo ''
 echo '  All installed!'

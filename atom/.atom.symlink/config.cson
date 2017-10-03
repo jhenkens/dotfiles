@@ -4,6 +4,7 @@
       beautify_on_save: true
     css:
       beautify_on_save: true
+    general: {}
     html:
       beautify_on_save: true
     js:
